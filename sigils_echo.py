@@ -219,6 +219,7 @@ FOX_REWARDS = [
 PHASE_WALL_TRANSITION = "wall_transition"
 PHASE_TITLE_REVEAL = "title_reveal"
 PHASE_GAMEPLAY_FADE = "gameplay_fade"
+PHASE_LISTEN_HOLD = "listen_hold"
 PHASE_COUNTDOWN = "countdown"
 PHASE_SHOW_PATTERN = "show_pattern"
 PHASE_INPUT = "input"
@@ -285,6 +286,7 @@ class SigilsEcho:
     WALL_TRANSITION_FRAMES = 120
     TITLE_REVEAL_TOTAL_FRAMES = 360
     GAMEPLAY_FADE_FRAMES = 90
+    LISTEN_HOLD_FRAMES = 120
     COUNTDOWN_READY_FRAMES = 75
     COUNTDOWN_NUMBER_FRAMES = 60
 
@@ -292,6 +294,8 @@ class SigilsEcho:
     REWARD_TRANSITION_FRAMES = 60
     COMPLETE_TRANSITION_FRAMES = 60
     REWARD_TO_CLAIMED_FRAMES = 60
+    REWARD_CLAIMED_HOLD_FRAMES = 210
+    CLAIMED_TO_COMPLETE_FADE_FRAMES = 60
     AI_REWARD_PREVIEW_FRAMES = 300
     COMPLETE_HOLD_FRAMES = 180
 
@@ -336,6 +340,7 @@ class SigilsEcho:
         self.wall_timer = 0
         self.title_timer = 0
         self.fade_timer = 0
+        self.listen_hold_timer = 0
         self.countdown_timer = 0
         self.countdown_number = 3
 
@@ -628,6 +633,13 @@ class SigilsEcho:
             self.fade_timer += 1
 
             if self.fade_timer >= self.GAMEPLAY_FADE_FRAMES:
+                self.phase = PHASE_LISTEN_HOLD
+                self.listen_hold_timer = 0
+
+        elif self.phase == PHASE_LISTEN_HOLD:
+            self.listen_hold_timer += 1
+
+            if self.listen_hold_timer >= self.LISTEN_HOLD_FRAMES:
                 self.start_countdown()
 
         elif self.phase == PHASE_COUNTDOWN:
@@ -668,20 +680,17 @@ class SigilsEcho:
         elif self.phase == PHASE_REWARD_CLAIMED:
             self.reward_claimed_timer += 1
 
-            if self.reward_claimed_timer >= 300:
+            if self.reward_claimed_timer >= self.REWARD_CLAIMED_HOLD_FRAMES:
                 self.phase = PHASE_COMPLETE
                 self.complete_transition_timer = 0
                 self.complete_hold_timer = 0
                 self.mini_game_finished = False
 
         elif self.phase == PHASE_COMPLETE:
-            if self.complete_transition_timer < self.COMPLETE_TRANSITION_FRAMES:
-                self.complete_transition_timer += 1
-            else:
-                self.complete_hold_timer += 1
+            self.complete_hold_timer += 1
 
-                if self.complete_hold_timer >= self.COMPLETE_HOLD_FRAMES:
-                    self.mini_game_finished = True
+            if self.complete_hold_timer >= self.COMPLETE_HOLD_FRAMES:
+                self.mini_game_finished = True
 
     def update_particles(self):
         """Updates subtle drifting particles."""
@@ -957,6 +966,9 @@ class SigilsEcho:
         elif self.phase == PHASE_GAMEPLAY_FADE:
             self.draw_intro_to_gameplay_fade(screen)
 
+        elif self.phase == PHASE_LISTEN_HOLD:
+            self.draw_gameplay_screen(screen)
+
         elif self.phase == PHASE_COUNTDOWN:
             self.draw_countdown_screen(screen)
 
@@ -1223,7 +1235,7 @@ class SigilsEcho:
                 self.draw_reward_to_claimed_transition(screen)
 
             else:
-                self.draw_reward_claimed(screen)
+                self.draw_reward_claimed_to_complete_transition(screen)
 
             return
 
@@ -1259,7 +1271,7 @@ class SigilsEcho:
         elif self.phase == PHASE_WIN_SEQUENCE:
             self.draw_win_sequence(screen)
 
-        elif self.phase in (PHASE_GAMEPLAY_FADE, PHASE_COMPLETE):
+        elif self.phase in (PHASE_GAMEPLAY_FADE, PHASE_LISTEN_HOLD, PHASE_COMPLETE):
             self.draw_idle_gameplay_layout(screen)
 
         if self.phase not in (
@@ -1482,29 +1494,18 @@ class SigilsEcho:
                 pygame.draw.circle(screen, GameTheme.EMPTY_CIRCLE, center, radius)
                 pygame.draw.circle(screen, GameTheme.CIRCLE_BORDER, center, radius, 2)
 
-    def draw_echo_complete_screen(self, screen):
-        """Draws the final Echo Complete screen without flashing back to the maze."""
-        progress = min(
-            self.complete_transition_timer / max(self.COMPLETE_TRANSITION_FRAMES, 1),
-            1.0,
-        )
-
-        # Draw the chosen reward screen underneath during the fade.
-        # This prevents the main maze from showing through.
-        previous_image = self.reward_chosen_images.get(self.selected_reward)
-
-        if previous_image:
-            screen.blit(previous_image, (0, 0))
-        else:
-            self.draw_gameplay_background(screen)
+    def draw_echo_complete_screen(self, screen, alpha=255):
+        """Draws the final Echo Complete screen."""
+        alpha = max(0, min(255, alpha))
 
         if self.complete_screen_image:
             image = self.complete_screen_image.copy()
-            image.set_alpha(int(255 * progress))
+            image.set_alpha(alpha)
             screen.blit(image, (0, 0))
             return
 
         # Fallback if the complete screen image is unavailable.
+        self.draw_gameplay_background(screen)
         self.draw_text(
             screen,
             "Echo Complete",
@@ -1512,6 +1513,7 @@ class SigilsEcho:
             GameTheme.TEXT,
             (512, 370),
             center=True,
+            alpha=alpha,
         )
 
     # -----------------------------
@@ -1753,6 +1755,40 @@ class SigilsEcho:
         # Fallback if images are missing.
         self.draw_gameplay_background(screen)
 
+    def draw_reward_claimed_to_complete_transition(self, screen):
+        """
+        Holds the chosen reward screen, then fades into the final complete screen.
+        """
+        fade_start = max(
+            0,
+            self.REWARD_CLAIMED_HOLD_FRAMES - self.CLAIMED_TO_COMPLETE_FADE_FRAMES,
+        )
+
+        if self.reward_claimed_timer < fade_start:
+            self.draw_reward_claimed(screen)
+            return
+
+        fade_progress = (
+            self.reward_claimed_timer - fade_start
+        ) / max(self.CLAIMED_TO_COMPLETE_FADE_FRAMES, 1)
+
+        fade_progress = max(0.0, min(1.0, fade_progress))
+        fade_progress = self.ease_out_cubic(fade_progress)
+
+        chosen_alpha = int(255 * (1.0 - fade_progress))
+        complete_alpha = int(255 * fade_progress)
+
+        image = self.reward_chosen_images.get(self.selected_reward)
+
+        if image:
+            chosen_surface = image.copy()
+            chosen_surface.set_alpha(chosen_alpha)
+            screen.blit(chosen_surface, (0, 0))
+        else:
+            self.draw_gameplay_background(screen)
+
+        self.draw_echo_complete_screen(screen, alpha=complete_alpha)
+
     def draw_reward_claimed(self, screen):
         """Draws the chosen reward screen using a full-screen image when available."""
         image = self.reward_chosen_images.get(self.selected_reward)
@@ -1818,6 +1854,11 @@ def run_standalone_demo():
             sigils_echo.handle_event(event)
 
         sigils_echo.update()
+
+        if sigils_echo.is_complete():
+            running = False
+            continue
+
         sigils_echo.draw(screen)
 
         pygame.display.flip()
