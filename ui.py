@@ -598,9 +598,6 @@ class GameUI:
         self.draw_grove_shift_hud(screen, grove_shift_meter, grove_shift_max)
         self.draw_shard_hud(screen, shards_collected, portal_is_active)
 
-        if portal_is_active and self.portal_ready_indicator_timer > 0:
-            self.draw_portal_ready_indicator(screen)
-
     def draw_active_effect_timers(
         self,
         screen,
@@ -860,7 +857,7 @@ class GameUI:
             (255, 255, 255),
         )
 
-        screen.blit(counter_surface, (panel_rect.x + 42, panel_rect.y + 4))
+        screen.blit(counter_surface, (panel_rect.x + 42, panel_rect.y))
 
     def draw_hud_shard_fallback(self, screen, center_x, center_y):
         """Draws a small fallback shard icon if the image asset is missing."""
@@ -924,7 +921,7 @@ class GameUI:
         message_surface.set_alpha(alpha)
 
         message_rect = message_surface.get_rect(
-            center=(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 36)
+            center=(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 28)
         )
 
         box_rect = message_rect.inflate(28, 12)
