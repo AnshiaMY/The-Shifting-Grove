@@ -435,6 +435,7 @@ class GameUI:
 
         self.player_spawn_glow_timer = 0
         self.portal_activation_timer = 0
+        self.portal_ready_indicator_timer = 0
 
     # -----------------------------
     # Update methods
@@ -444,6 +445,7 @@ class GameUI:
         """Resets level-specific UI feedback when a new maze begins."""
         self.player_spawn_glow_timer = PLAYER_START_GLOW_FRAMES
         self.portal_activation_timer = 0
+        self.portal_ready_indicator_timer = 0
         self.sparkles.clear()
         self.toasts.clear()
 
@@ -457,6 +459,9 @@ class GameUI:
 
         if self.portal_activation_timer > 0:
             self.portal_activation_timer -= 1
+
+        if self.portal_ready_indicator_timer > 0:
+            self.portal_ready_indicator_timer -= 1
 
     def update_transition(self):
         """Updates transition-specific visuals."""
@@ -530,6 +535,7 @@ class GameUI:
             )
 
         self.portal_activation_timer = 120
+        self.portal_ready_indicator_timer = 180
         self.show_toast("Portal Ready!", duration=130)
 
     # -----------------------------
@@ -592,7 +598,7 @@ class GameUI:
         self.draw_grove_shift_hud(screen, grove_shift_meter, grove_shift_max)
         self.draw_shard_hud(screen, shards_collected, portal_is_active)
 
-        if portal_is_active:
+        if portal_is_active and self.portal_ready_indicator_timer > 0:
             self.draw_portal_ready_indicator(screen)
 
     def draw_active_effect_timers(
